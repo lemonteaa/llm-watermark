@@ -5,6 +5,8 @@ import hashlib
 
 from typing import NamedTuple
 
+from datetime import datetime # For LLM self-knowledge
+
 from llama_cpp import Llama, LogitsProcessor, LogitsProcessorList
 
 def hash_custom(lst, key):
@@ -63,39 +65,46 @@ class WaterMarkingLogitsProcessor(LogitsProcessor):
         g = -1.0 * np.log(-1.0 * np.log(r))
         return (scores/(self.config.temperature) + g)
 
+class CustomLLMGeneration:
+    def __init__(self, llm, prompt_template, logit_processors):
+        self.llm = llm
+        self.prompt_template = prompt_template
+        self.logit_processors = logit_processors
+    
+    def generate(self, prompt):
+        compiled_prompt = self.prompt_template.format(query=prompt, today=datetime.now().strftime("%d %b, %Y"))
+        tokens = self.llm.tokenize(compiled_prompt.encode("utf-8"))
+        for token in self.llm.generate(tokens, temp=0.0, repeat_penalty=1.0, logits_processor=LogitsProcessorList(self.logit_processors)):
+            if token in [128007, 128008, 128009, 128001]:
+                break
+            #print(f"T: {token}", flush=True)
+            print(self.llm.detokenize([token]).decode("utf-8"), end='', flush=True)
+
 
 llm = Llama(
       model_path="C:\\Users\\user\\Desktop\\LLM_Model_Collections\\bartowski-Meta-Llama-3.1-8B-Instruct-Q3_K_M.gguf",
-      #chat_format="llama-2",
       n_ctx=2048,
       n_gpu_layers=-1
 )
 
-
-
-prompt = b"""<|begin_of_text|><|start_header_id|>system<|end_header_id|>
+prompt_template = """<|begin_of_text|><|start_header_id|>system<|end_header_id|>
 
 Cutting Knowledge Date: December 2023
-Today Date: 23 July 2024
+Today Date: {today}
 
 You are a helpful assistant.<|eot_id|><|start_header_id|>user<|end_header_id|>
 
-Write an essay on the role of information technology in international supply chain.<|eot_id|><|start_header_id|>assistant<|end_header_id|>"""
+{query}<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+"""
 
-tokens = llm.tokenize(prompt)
+prompt = "Write an essay on the role of information technology in international supply chain."
 
 my_conf = WaterMarkConfig(temperature=0.7, key="helloworld", n_vocab=llm.n_vocab(), window_m=6, holdout=30)
 
 my_logit_proc = WaterMarkingLogitsProcessor(config=my_conf)
 
-for token in llm.generate(tokens, temp=0.0, repeat_penalty=1.0, logits_processor=LogitsProcessorList([my_logit_proc])):
-    #for token in llm.generate(tokens, temp=0.7, repeat_penalty=1.0):
-    if token in [128007, 128008, 128009, 128001]:
-        break
-    #print(f"T: {token}", flush=True)
-    print(llm.detokenize([token]).decode("utf-8"), end='', flush=True)
+mainLLM = CustomLLMGeneration(llm, prompt_template, [my_logit_proc])
 
-
-
+mainLLM.generate(prompt)
 
 
