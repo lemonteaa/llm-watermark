@@ -73,14 +73,38 @@ class CustomLLMGeneration:
         self.prompt_template = prompt_template
         self.logit_processors = logit_processors
     
-    def generate(self, prompt):
+    def generate(self, prompt, max_new_tokens = 500):
+        reached_max = False
         compiled_prompt = self.prompt_template.format(query=prompt, today=datetime.now().strftime("%d %b, %Y"))
         tokens = self.llm.tokenize(compiled_prompt.encode("utf-8"))
+        count = 0
         for token in self.llm.generate(tokens, temp=0.0, repeat_penalty=1.0, logits_processor=LogitsProcessorList(self.logit_processors)):
             if token in [128007, 128008, 128009, 128001]:
                 break
             #print(f"T: {token}", flush=True)
             print(self.llm.detokenize([token]).decode("utf-8"), end='', flush=True)
+            count += 1
+            if count >= max_new_tokens:
+                reached_max = True
+                break
+        return reached_max
+    
+    def generate_file(self, prompt, out_file, max_new_tokens = 500):
+        reached_max = False
+        compiled_prompt = self.prompt_template.format(query=prompt, today=datetime.now().strftime("%d %b, %Y"))
+        tokens = self.llm.tokenize(compiled_prompt.encode("utf-8"))
+        count = 0
+        result = []
+        for token in self.llm.generate(tokens, temp=0.0, repeat_penalty=1.0, logits_processor=LogitsProcessorList(self.logit_processors)):
+            if token in [128007, 128008, 128009, 128001]:
+                break
+            count += 1
+            result.append(token)
+            if count >= max_new_tokens:
+                reached_max = True
+                break
+        with open(out_file, mode='w', encoding='utf-8') as f:
+            f.write(self.llm.detokenize(result).decode("utf-8"))
 
 prompt_template = """<|begin_of_text|><|start_header_id|>system<|end_header_id|>
 
@@ -92,6 +116,7 @@ You are a helpful assistant.<|eot_id|><|start_header_id|>user<|end_header_id|>
 {query}<|eot_id|><|start_header_id|>assistant<|end_header_id|>
 """
 
+# Sample command: py .\generate.py -m "C:\\Users\\user\\Desktop\\LLM_Model_Collections\\bartowski-Meta-Llama-3.1-8B-Instruct-Q3_K_M.gguf" -s "helloworld" -w 6 -H 30 batch -p "Write an essay on the role of information technology in international supply chain."
 if __name__ == '__main__':
     main_desc = "Educational demostration of the classical Gumbell trick based LLM Watermarking method."
     parser = argparse.ArgumentParser(description=main_desc)
@@ -148,10 +173,19 @@ if __name__ == '__main__':
         #prompt = "Write an essay on the role of information technology in international supply chain."
         prompt = args.prompt
         
-        my_conf = WaterMarkConfig(temperature=args.temp, key=args.secret, n_vocab=llm.n_vocab(), window_m=args.window, holdout=args.holdout)
+        for i in range(args.n):
         
-        my_logit_proc = WaterMarkingLogitsProcessor(config=my_conf)
-        
-        mainLLM = CustomLLMGeneration(llm, prompt_template, [my_logit_proc])
-        
-        mainLLM.generate(prompt)
+            my_conf = WaterMarkConfig(temperature=args.temp, key=args.secret, n_vocab=llm.n_vocab(), window_m=args.window, holdout=args.holdout)
+            
+            my_logit_proc = WaterMarkingLogitsProcessor(config=my_conf)
+            
+            mainLLM = CustomLLMGeneration(llm, prompt_template, [my_logit_proc])
+            if args.file is None:
+                print("----")
+                print("|Begin {cnt}-th sample generations|".format(cnt=str(i+1)))
+                max_reached = mainLLM.generate(prompt)
+                print("|End: max token reached? {max}".format(max=str(max_reached)))
+            else:
+                mainLLM.generate_file(prompt, out_file="{prefix}_{dt}_{cnt}.txt".format(prefix=args.file, cnt=str(i), dt=datetime.now().strftime("%Y%m%d-%H%M%S")))
+        print("----")
+        print("Done.")
