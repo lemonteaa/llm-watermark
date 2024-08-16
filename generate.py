@@ -73,6 +73,7 @@ class CustomLLMGeneration:
         self.prompt_template = prompt_template
         self.logit_processors = logit_processors
     
+    # TODO: refactor
     def generate(self, prompt, max_new_tokens = 500):
         reached_max = False
         compiled_prompt = self.prompt_template.format(query=prompt, today=datetime.now().strftime("%d %b, %Y"))
@@ -173,8 +174,12 @@ if __name__ == '__main__':
         #prompt = "Write an essay on the role of information technology in international supply chain."
         prompt = args.prompt
         
-        for i in range(args.n):
+        dt_now = datetime.now()
+        dt_str = dt_now.strftime("%Y%m%d-%H%M%S")
+        print(dt_now)
         
+        for i in range(args.n):
+            # Main gen
             my_conf = WaterMarkConfig(temperature=args.temp, key=args.secret, n_vocab=llm.n_vocab(), window_m=args.window, holdout=args.holdout)
             
             my_logit_proc = WaterMarkingLogitsProcessor(config=my_conf)
@@ -186,6 +191,23 @@ if __name__ == '__main__':
                 max_reached = mainLLM.generate(prompt)
                 print("|End: max token reached? {max}".format(max=str(max_reached)))
             else:
-                mainLLM.generate_file(prompt, out_file="{prefix}_{dt}_{cnt}.txt".format(prefix=args.file, cnt=str(i), dt=datetime.now().strftime("%Y%m%d-%H%M%S")))
+                mainLLM.generate_file(prompt, out_file="{prefix}_{dt}_{cnt}.txt".format(prefix=args.file, cnt=str(i), dt=dt_str))
+            
+            if not args.no_baseline:
+                continue
+            # Main gen - baseline
+            my_conf = WaterMarkConfig(temperature=args.temp, key=args.secret, n_vocab=llm.n_vocab(), window_m=args.window, holdout=args.holdout)
+            
+            my_logit_proc = WaterMarkingLogitsProcessor(config=my_conf)
+            my_logit_proc.enable = False
+            
+            mainLLM = CustomLLMGeneration(llm, prompt_template, [my_logit_proc])
+            if args.file is None:
+                print("----")
+                print("|Begin {cnt}-th sample generations (baseline no watermark)|".format(cnt=str(i+1)))
+                max_reached = mainLLM.generate(prompt)
+                print("|End: max token reached? {max}".format(max=str(max_reached)))
+            else:
+                mainLLM.generate_file(prompt, out_file="{prefix}_{dt}_{cnt}_nowatermark.txt".format(prefix=args.file, cnt=str(i), dt=dt_str))
         print("----")
         print("Done.")
