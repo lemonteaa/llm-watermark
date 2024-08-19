@@ -19,9 +19,7 @@ Let $g_i$ be a vector of i.i.d $\text{Gumbell}(0, 1)$ distributed random variabl
 
 ### Watermarking LLM
 
-(TODO: add ACL reference)
-
-Rephrased in a way that hopefully non-researcher can understand...
+Rephrased in a way that hopefully non-researcher can understand... (see references below)
 
 Given a LLM, run it in a modified manner to produce outputs that are subtly different. Ideally the modification is agnostic to which brand of LLM model you're using, so it's like adding a wrapper around it. And it should also have reasonably negligible performance impact (both in terms of speed and in terms of the model's "intelligence"). Separately, there should be a detection program that can run without access to the original LLM.
 
@@ -58,3 +56,8 @@ What if the user edit the text or copy/paste/move text around? Provided the edit
 
 The key (pun not intended) lies in examining how editing affect the sliding windows. You should find out that the effect of the kinds of edits above are *local* - they may "corrupt" the sliding window only of themselves plus some token within the range of the sliding window at the edit boundary. After that other tokens still have an intact sliding window, and that's all you need to derive the per position key $k_i$ correctly, so those are not affected.
 
+
+## References
+
+- X. Zhao, Y. Wang, L. Li. "Watermarking for Large Language Model," in *Tutorials of ACL*, 2024. https://leililab.github.io/llm_watermark_tutorial/
+- Jiayi Fu, Xuandong Zhao, Ruihan Yang, et al, "GumbelSoft: Diversified Language Model Watermarking via the GumbelMax-trick," 2024. https://arxiv.org/abs/2402.12948
